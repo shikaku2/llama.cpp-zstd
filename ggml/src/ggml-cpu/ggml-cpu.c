@@ -2995,6 +2995,13 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             continue;
         }
 
+        if (state->ith == 0 && cplan->pre_node_callback) {
+            cplan->pre_node_callback(node, cplan->pre_node_callback_data);
+        }
+        if (cplan->pre_node_callback) {
+            ggml_barrier(state->threadpool);
+        }
+
         ggml_compute_forward(&params, node);
 
         if (state->ith == 0 && cplan->abort_callback &&

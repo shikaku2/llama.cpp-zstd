@@ -10,6 +10,10 @@
 #include "llama-model-saver.h"
 #include "llama-model.h"
 
+#ifdef GGML_USE_ZSTD
+#include "llama-weight-zstd.h"
+#endif
+
 #include "ggml.h"
 #include "ggml-cpp.h"
 #include "ggml-backend.h"
@@ -160,6 +164,12 @@ static int llama_model_load(struct gguf_context * metadata, llama_model_set_tens
         if (!model.load_tensors(ml)) {
             return -2;
         }
+
+#ifdef GGML_USE_ZSTD
+        if (params.cpu_weight_zstd_level > 0) {
+            llama_weight_zstd_compress(model, params);
+        }
+#endif
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: error loading model: %s\n", __func__, err.what());
         return -1;

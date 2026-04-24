@@ -1482,6 +1482,12 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     mparams.progress_callback_user_data = params.load_progress_callback_user_data;
     mparams.no_alloc                    = params.no_alloc;
 
+    mparams.cpu_weight_zstd_level     = params.cpu_weight_zstd_level;
+    mparams.igpu_weight_zstd_level    = params.igpu_weight_zstd_level;
+    mparams.cpu_weight_zstd_threshold = params.cpu_weight_zstd_threshold;
+    mparams.cpu_weight_zstd_frame_kb  = 256;
+    mparams.cpu_weight_zstd_validate  = params.cpu_weight_zstd_validate;
+
     return mparams;
 }
 

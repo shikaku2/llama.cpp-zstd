@@ -446,6 +446,11 @@ struct common_params {
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
     enum llama_flash_attn_type   flash_attn_type   = LLAMA_FLASH_ATTN_TYPE_AUTO; // whether to use Flash Attention
 
+    int   cpu_weight_zstd_level     = 0;      // 0 = disabled, 1-19 = compression level
+    int   igpu_weight_zstd_level    = 0;
+    float cpu_weight_zstd_threshold = 0.90f;  // skip tensor if compressed_size/original_size > threshold
+    bool  cpu_weight_zstd_validate  = false;
+
     struct common_params_sampling    sampling;
     struct common_params_speculative speculative;
     struct common_params_vocoder     vocoder;

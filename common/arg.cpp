@@ -2480,6 +2480,40 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
+        {"--cpu-weight-zstd"}, "LEVEL",
+        "compress CPU-backend weight tensors with zstd seekable format (level 1-19); decompress transparently before each op",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 19) {
+                throw std::runtime_error("--cpu-weight-zstd: level must be 1-19");
+            }
+            params.cpu_weight_zstd_level = value;
+        }
+    ).set_env("LLAMA_ARG_CPU_WEIGHT_ZSTD"));
+    add_opt(common_arg(
+        {"--igpu-weight-zstd"}, "LEVEL",
+        "compress unified-memory iGPU weight tensors with zstd seekable format (level 1-19)",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 19) {
+                throw std::runtime_error("--igpu-weight-zstd: level must be 1-19");
+            }
+            params.igpu_weight_zstd_level = value;
+        }
+    ).set_env("LLAMA_ARG_IGPU_WEIGHT_ZSTD"));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd-threshold"}, "RATIO",
+        string_format("skip tensor compression if compressed/original size ratio exceeds this value (default: %.2f)", params.cpu_weight_zstd_threshold),
+        [](common_params & params, const std::string & value) {
+            params.cpu_weight_zstd_threshold = std::stof(value);
+        }
+    ));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd-validate"},
+        "validate zstd weight compression with a round-trip decompress check at load time",
+        [](common_params & params) {
+            params.cpu_weight_zstd_validate = true;
+        }
+    ));
+    add_opt(common_arg(
         {"--override-kv"}, "KEY=TYPE:VALUE,...",
         "advanced option to override model metadata by key. to specify multiple overrides, either use comma-separated values.\n"
         "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false,tokenizer.ggml.add_eos_token=bool:false",

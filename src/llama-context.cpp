@@ -1,6 +1,7 @@
 #include "llama-context.h"
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 #include "llama-arch.h"
 #include "llama-impl.h"
 #include "llama-batch.h"
@@ -259,6 +260,16 @@ llama_context::llama_context(
         }
 
         llama_set_abort_callback(this, params.abort_callback, params.abort_callback_data);
+
+#ifdef GGML_USE_ZSTD
+        if (model.zstd_state && !model.zstd_state->weights.empty() && backend_cpu != nullptr) {
+            zstd_ctx.reset(llama_zstd_ctx_init(*model.zstd_state));
+            if (zstd_ctx) {
+                zstd_cbd.reset(llama_zstd_callback_data_init(&model.zstd_state->weights, zstd_ctx.get()));
+                ggml_backend_cpu_set_pre_node_callback(backend_cpu, llama_zstd_pre_node_cb_impl, zstd_cbd.get());
+            }
+        }
+#endif
 
         // graph outputs buffer
         {
