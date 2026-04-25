@@ -149,7 +149,7 @@ public:
     void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
 
 #ifdef GGML_USE_ZSTD
-    void kv_zstd_init    (int level, size_t frame_kb) override;
+    void kv_zstd_init    (int level, size_t frame_kb, float threshold, int recompress = 0) override;
     void kv_zstd_pre_decode  () override;
     void kv_zstd_post_decode () override;
 #endif

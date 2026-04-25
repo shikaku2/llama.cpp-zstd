@@ -121,7 +121,7 @@ struct llama_memory_i {
     // Optional async zstd KV cache compression hooks — no-op by default.
     // Implemented by llama_kv_cache when GGML_USE_ZSTD is enabled and the
     // KV buffers are CPU-resident.
-    virtual void kv_zstd_init    (int level, size_t frame_kb) { (void)level; (void)frame_kb; }
+    virtual void kv_zstd_init    (int level, size_t frame_kb, float threshold, int recompress = 0) { (void)level; (void)frame_kb; (void)threshold; (void)recompress; }
     virtual void kv_zstd_pre_decode  () {}
     virtual void kv_zstd_post_decode () {}
 };

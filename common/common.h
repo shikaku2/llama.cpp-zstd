@@ -454,6 +454,8 @@ struct common_params {
     int   cpu_weight_zstd_frame_kb           = 256;    // seekable frame size in KB (default 256)
     int   kv_zstd_level                      = 0;      // 0 = disabled; async background KV cache compression level
     int   kv_zstd_frame_kb                   = 256;    // KV cache compression frame size in KB
+    float kv_zstd_threshold                  = 0.90f;  // skip frame if compressed/original size ratio exceeds this
+    int   kv_zstd_recompress                 = 0;      // 0 = single pass; 1-19 = second-pass level for better compression
 
     struct common_params_sampling    sampling;
     struct common_params_speculative speculative;

@@ -372,8 +372,10 @@ extern "C" {
         void *              abort_callback_data;
 
         // Async zstd compression of CPU-resident KV cache (0 = disabled, 1-19 = level)
-        int32_t kv_zstd_level;     // compression level; 0 = disabled
-        int32_t kv_zstd_frame_kb;  // seekable frame size in KB (default 256)
+        int32_t kv_zstd_level;      // first-pass compression level; 0 = disabled
+        int32_t kv_zstd_frame_kb;   // seekable frame size in KB (default 256)
+        float   kv_zstd_threshold;  // skip frame if compressed/original ratio exceeds this (default 0.90)
+        int32_t kv_zstd_recompress; // second-pass level (0 = single pass, 1-19 = recompress level)
 
         // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
         bool embeddings;  // if true, extract embeddings (together with logits)

@@ -2514,7 +2514,7 @@ void llama_kv_cache_context::set_input_v_rot(ggml_tensor * dst) const {
 
 #ifdef GGML_USE_ZSTD
 
-void llama_kv_cache::kv_zstd_init(int level, size_t frame_kb) {
+void llama_kv_cache::kv_zstd_init(int level, size_t frame_kb, float threshold, int recompress) {
     int n_cpu = 0;
     for (const auto & layer : layers) {
         for (auto * t : {layer.k, layer.v}) {
@@ -2539,15 +2539,17 @@ void llama_kv_cache::kv_zstd_init(int level, size_t frame_kb) {
         }
     }
 
-    LLAMA_LOG_INFO("%s: kv zstd level=%d frame_kb=%zu tensors=%d total=%.1f MiB\n",
-        __func__, level, frame_kb, n_cpu,
+    LLAMA_LOG_INFO("%s: kv zstd level=%d%s frame_kb=%zu tensors=%d total=%.1f MiB\n",
+        __func__, level,
+        recompress > 0 ? (" recompress=" + std::to_string(recompress)).c_str() : "",
+        frame_kb, n_cpu,
         [&](){
             size_t total = 0;
             for (auto & ts : zstd->tensors) { total += ts.raw_bytes; }
             return total / (1024.0 * 1024.0);
         }());
 
-    zstd->init(level);
+    zstd->init(level, threshold, recompress);
 }
 
 void llama_kv_cache::kv_zstd_pre_decode() {

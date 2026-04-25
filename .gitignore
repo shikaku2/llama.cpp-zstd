@@ -163,3 +163,7 @@ bench_snappy_par
 bench_snappy_par.cpp
 updatejade.sh
 bench-zstd-igpu.sh
+bench-zstd-ram.sh
+compare_kv
+compare_kv.cpp
+save_kv_caches.sh

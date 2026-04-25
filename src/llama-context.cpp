@@ -52,8 +52,10 @@ llama_context::llama_context(
     cparams.embeddings       = params.embeddings;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.no_perf          = params.no_perf;
-    cparams.kv_zstd_level    = params.kv_zstd_level;
-    cparams.kv_zstd_frame_kb = params.kv_zstd_frame_kb > 0 ? params.kv_zstd_frame_kb : 256;
+    cparams.kv_zstd_level      = params.kv_zstd_level;
+    cparams.kv_zstd_frame_kb   = params.kv_zstd_frame_kb > 0 ? params.kv_zstd_frame_kb : 256;
+    cparams.kv_zstd_threshold  = params.kv_zstd_threshold;
+    cparams.kv_zstd_recompress = params.kv_zstd_recompress;
     cparams.pooling_type     = params.pooling_type;
     cparams.warmup           = false;
 
@@ -292,7 +294,7 @@ llama_context::llama_context(
         memory.reset(model.create_memory(params_mem, cparams));
 
         if (cparams.kv_zstd_level > 0) {
-            memory->kv_zstd_init(cparams.kv_zstd_level, (size_t)cparams.kv_zstd_frame_kb);
+            memory->kv_zstd_init(cparams.kv_zstd_level, (size_t)cparams.kv_zstd_frame_kb, cparams.kv_zstd_threshold, cparams.kv_zstd_recompress);
         }
     }
 
@@ -2937,6 +2939,8 @@ llama_context_params llama_context_default_params() {
         /*.abort_callback_data         =*/ nullptr,
         /*.kv_zstd_level               =*/ 0,
         /*.kv_zstd_frame_kb            =*/ 256,
+        /*.kv_zstd_threshold           =*/ 0.90f,
+        /*.kv_zstd_recompress          =*/ 0,
         /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.no_perf                     =*/ true,
