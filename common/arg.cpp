@@ -2010,26 +2010,38 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"-ctk", "--cache-type-k"}, "TYPE",
         string_format(
             "KV cache data type for K\n"
-            "allowed values: %s\n"
+            "allowed values: %s, zstd[:level]\n"
             "(default: %s)",
             get_all_kv_cache_types().c_str(),
             ggml_type_name(params.cache_type_k)
         ),
         [](common_params & params, const std::string & value) {
-            params.cache_type_k = kv_cache_type_from_str(value);
+            if (value == "zstd" || (value.size() > 5 && value.substr(0, 5) == "zstd:")) {
+                int lvl = (value.size() > 5) ? std::stoi(value.substr(5)) : 1;
+                if (lvl < 1 || lvl > 19) { throw std::runtime_error("-ctk zstd: level must be 1-19"); }
+                params.kv_zstd_level = lvl;
+            } else {
+                params.cache_type_k = kv_cache_type_from_str(value);
+            }
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(common_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
         string_format(
             "KV cache data type for V\n"
-            "allowed values: %s\n"
+            "allowed values: %s, zstd[:level]\n"
             "(default: %s)",
             get_all_kv_cache_types().c_str(),
             ggml_type_name(params.cache_type_v)
         ),
         [](common_params & params, const std::string & value) {
-            params.cache_type_v = kv_cache_type_from_str(value);
+            if (value == "zstd" || (value.size() > 5 && value.substr(0, 5) == "zstd:")) {
+                int lvl = (value.size() > 5) ? std::stoi(value.substr(5)) : 1;
+                if (lvl < 1 || lvl > 19) { throw std::runtime_error("-ctv zstd: level must be 1-19"); }
+                params.kv_zstd_level = lvl;
+            } else {
+                params.cache_type_v = kv_cache_type_from_str(value);
+            }
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(
@@ -2491,23 +2503,23 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_CPU_WEIGHT_ZSTD"));
     add_opt(common_arg(
         {"--igpu-weight-zstd"}, "LEVEL",
-        "compress unified-memory iGPU weight tensors with zstd seekable format (level 1-19)",
+        "compress CPU-resident weights with zstd (level 1-19); convenience alias for --cpu-weight-zstd for iGPU/unified-memory systems",
         [](common_params & params, int value) {
             if (value < 1 || value > 19) {
                 throw std::runtime_error("--igpu-weight-zstd: level must be 1-19");
             }
-            params.igpu_weight_zstd_level = value;
+            params.cpu_weight_zstd_level = value;
         }
     ).set_env("LLAMA_ARG_IGPU_WEIGHT_ZSTD"));
     add_opt(common_arg(
-        {"--cpu-weight-zstd-threshold"}, "RATIO",
+        {"--cpu-weight-zstd-threshold", "--igpu-weight-zstd-threshold"}, "RATIO",
         string_format("skip tensor compression if compressed/original size ratio exceeds this value (default: %.2f)", params.cpu_weight_zstd_threshold),
         [](common_params & params, const std::string & value) {
             params.cpu_weight_zstd_threshold = std::stof(value);
         }
     ));
     add_opt(common_arg(
-        {"--cpu-weight-zstd-validate"},
+        {"--cpu-weight-zstd-validate", "--igpu-weight-zstd-validate"},
         "validate zstd weight compression with a round-trip decompress check at load time",
         [](common_params & params) {
             params.cpu_weight_zstd_validate = true;
@@ -2524,8 +2536,8 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
-        {"--cpu-weight-zstd-frame-kb"}, "KB",
-        string_format("seekable zstd frame size in KB (default: %d)", 256),
+        {"--cpu-weight-zstd-frame-kb", "--igpu-weight-zstd-frame-kb"}, "KB",
+        string_format("seekable zstd frame size in KB for weight compression (default: %d)", 256),
         [](common_params & params, int value) {
             if (value < 1) {
                 throw std::runtime_error("--cpu-weight-zstd-frame-kb: must be >= 1");

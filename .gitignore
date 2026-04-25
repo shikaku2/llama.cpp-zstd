@@ -157,3 +157,9 @@ log0.txt
 log20000.txt
 stats.txt
 updatelocal.sh
+bench_lz4hc_par
+bench_lz4hc_par.cpp
+bench_snappy_par
+bench_snappy_par.cpp
+updatejade.sh
+bench-zstd-igpu.sh
