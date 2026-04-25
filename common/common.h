@@ -446,10 +446,14 @@ struct common_params {
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
     enum llama_flash_attn_type   flash_attn_type   = LLAMA_FLASH_ATTN_TYPE_AUTO; // whether to use Flash Attention
 
-    int   cpu_weight_zstd_level     = 0;      // 0 = disabled, 1-19 = compression level
-    int   igpu_weight_zstd_level    = 0;
-    float cpu_weight_zstd_threshold = 0.90f;  // skip tensor if compressed_size/original_size > threshold
-    bool  cpu_weight_zstd_validate  = false;
+    int   cpu_weight_zstd_level              = 0;      // 0 = disabled, 1-19 = compression level
+    int   igpu_weight_zstd_level             = 0;
+    float cpu_weight_zstd_threshold          = 0.90f;  // skip tensor if compressed_size/original_size > threshold
+    bool  cpu_weight_zstd_validate           = false;
+    int   cpu_weight_zstd_compress_threads   = 1;      // threads used during initial compression (default 1 to keep peak RAM low)
+    int   cpu_weight_zstd_frame_kb           = 256;    // seekable frame size in KB (default 256)
+    int   kv_zstd_level                      = 0;      // 0 = disabled; async background KV cache compression level
+    int   kv_zstd_frame_kb                   = 256;    // KV cache compression frame size in KB
 
     struct common_params_sampling    sampling;
     struct common_params_speculative speculative;

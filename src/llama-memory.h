@@ -117,6 +117,13 @@ struct llama_memory_i {
 
     virtual void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const = 0;
     virtual void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) = 0;
+
+    // Optional async zstd KV cache compression hooks — no-op by default.
+    // Implemented by llama_kv_cache when GGML_USE_ZSTD is enabled and the
+    // KV buffers are CPU-resident.
+    virtual void kv_zstd_init    (int level, size_t frame_kb) { (void)level; (void)frame_kb; }
+    virtual void kv_zstd_pre_decode  () {}
+    virtual void kv_zstd_post_decode () {}
 };
 
 using llama_memory_ptr = std::unique_ptr<llama_memory_i>;

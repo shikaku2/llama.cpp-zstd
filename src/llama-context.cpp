@@ -52,6 +52,8 @@ llama_context::llama_context(
     cparams.embeddings       = params.embeddings;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.no_perf          = params.no_perf;
+    cparams.kv_zstd_level    = params.kv_zstd_level;
+    cparams.kv_zstd_frame_kb = params.kv_zstd_frame_kb > 0 ? params.kv_zstd_frame_kb : 256;
     cparams.pooling_type     = params.pooling_type;
     cparams.warmup           = false;
 
@@ -262,12 +264,8 @@ llama_context::llama_context(
         llama_set_abort_callback(this, params.abort_callback, params.abort_callback_data);
 
 #ifdef GGML_USE_ZSTD
-        if (model.zstd_state && !model.zstd_state->weights.empty() && backend_cpu != nullptr) {
-            zstd_ctx.reset(llama_zstd_ctx_init(*model.zstd_state));
-            if (zstd_ctx) {
-                zstd_cbd.reset(llama_zstd_callback_data_init(&model.zstd_state->weights, zstd_ctx.get()));
-                ggml_backend_cpu_set_pre_node_callback(backend_cpu, llama_zstd_pre_node_cb_impl, zstd_cbd.get());
-            }
+        if (model.zstd_state && !model.zstd_state->weights.empty()) {
+            zstd_ctx.reset(llama_zstd_ctx_init(*model.zstd_state, model));
         }
 #endif
 
@@ -292,6 +290,10 @@ llama_context::llama_context(
         };
 
         memory.reset(model.create_memory(params_mem, cparams));
+
+        if (cparams.kv_zstd_level > 0) {
+            memory->kv_zstd_init(cparams.kv_zstd_level, (size_t)cparams.kv_zstd_frame_kb);
+        }
     }
 
     // init backends
@@ -1680,6 +1682,9 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
     int64_t n_outputs_prev = 0;
 
+    // Restore any MADV_DONTNEED'd KV frames before the graph accesses them.
+    memory->kv_zstd_pre_decode();
+
     do {
         const auto & ubatch = mctx->get_ubatch();
 
@@ -1835,6 +1840,9 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
         n_outputs_prev += n_outputs;
     } while (mctx->next());
+
+    // KV cache is fully updated — kick off background compression.
+    memory->kv_zstd_post_decode();
 
     // set to total number of outputs in the batch, for use in llama_get_logits_ith
     n_outputs = n_outputs_all;
@@ -2198,6 +2206,12 @@ ggml_status llama_context::graph_compute(
     for (const auto & set_n_threads_fn : set_n_threads_fns) {
         set_n_threads_fn.second(set_n_threads_fn.first, n_threads);
     }
+
+#ifdef GGML_USE_ZSTD
+    if (zstd_ctx && model.zstd_state) {
+        llama_zstd_decompress_graph(gf, model.zstd_state->weights, *zstd_ctx);
+    }
+#endif
 
     auto status = ggml_backend_sched_graph_compute_async(sched.get(), gf);
     if (status != GGML_STATUS_SUCCESS) {
@@ -2921,6 +2935,8 @@ llama_context_params llama_context_default_params() {
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
+        /*.kv_zstd_level               =*/ 0,
+        /*.kv_zstd_frame_kb            =*/ 256,
         /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.no_perf                     =*/ true,

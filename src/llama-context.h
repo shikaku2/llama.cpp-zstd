@@ -323,8 +323,7 @@ private:
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
 
 #ifdef GGML_USE_ZSTD
-    std::unique_ptr<llama_zstd_ctx_state>      zstd_ctx;
-    std::unique_ptr<llama_zstd_callback_data>  zstd_cbd;
+    std::unique_ptr<llama_zstd_ctx_state>  zstd_ctx;
 #endif
 
     // pointers and buffer types used for the compute buffer of each backend

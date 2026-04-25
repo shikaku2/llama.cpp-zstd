@@ -5,6 +5,11 @@
 #include "llama-model.h"
 #include "llama-context.h"
 
+#ifdef GGML_USE_ZSTD
+#include "llama-kv-zstd.h"
+#include "ggml-backend.h"
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -2502,3 +2507,55 @@ void llama_kv_cache_context::set_input_k_rot(ggml_tensor * dst) const {
 void llama_kv_cache_context::set_input_v_rot(ggml_tensor * dst) const {
     kv->set_input_v_rot(dst);
 }
+
+// ---------------------------------------------------------------------------
+// zstd KV cache compression hooks
+// ---------------------------------------------------------------------------
+
+#ifdef GGML_USE_ZSTD
+
+void llama_kv_cache::kv_zstd_init(int level, size_t frame_kb) {
+    int n_cpu = 0;
+    for (const auto & layer : layers) {
+        for (auto * t : {layer.k, layer.v}) {
+            if (t && t->buffer && ggml_backend_buffer_is_host(t->buffer)) {
+                n_cpu++;
+            }
+        }
+    }
+
+    if (n_cpu == 0) {
+        LLAMA_LOG_INFO("%s: kv zstd skipped — no CPU-resident KV tensors\n", __func__);
+        return;
+    }
+
+    zstd = std::make_unique<kv_zstd_state>();
+    for (const auto & layer : layers) {
+        for (auto * t : {layer.k, layer.v}) {
+            if (t && t->buffer && ggml_backend_buffer_is_host(t->buffer)) {
+                zstd->tensors.emplace_back(
+                    (uint8_t *)t->data, ggml_nbytes(t), frame_kb * 1024);
+            }
+        }
+    }
+
+    LLAMA_LOG_INFO("%s: kv zstd level=%d frame_kb=%zu tensors=%d total=%.1f MiB\n",
+        __func__, level, frame_kb, n_cpu,
+        [&](){
+            size_t total = 0;
+            for (auto & ts : zstd->tensors) { total += ts.raw_bytes; }
+            return total / (1024.0 * 1024.0);
+        }());
+
+    zstd->init(level);
+}
+
+void llama_kv_cache::kv_zstd_pre_decode() {
+    if (zstd) { zstd->sync(); }
+}
+
+void llama_kv_cache::kv_zstd_post_decode() {
+    if (zstd) { zstd->start(); }
+}
+
+#endif // GGML_USE_ZSTD

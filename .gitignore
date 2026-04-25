@@ -147,3 +147,13 @@ poetry.toml
 a.out.*
 
 AGENTS.local.md
+
+bench_seekable_par
+bench_seekable_par.cpp
+bench-zstd.sh
+gdb.txt
+log.txt
+log0.txt
+log20000.txt
+stats.txt
+updatelocal.sh

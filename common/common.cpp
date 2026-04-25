@@ -1485,8 +1485,9 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     mparams.cpu_weight_zstd_level     = params.cpu_weight_zstd_level;
     mparams.igpu_weight_zstd_level    = params.igpu_weight_zstd_level;
     mparams.cpu_weight_zstd_threshold = params.cpu_weight_zstd_threshold;
-    mparams.cpu_weight_zstd_frame_kb  = 256;
+    mparams.cpu_weight_zstd_frame_kb  = params.cpu_weight_zstd_frame_kb;
     mparams.cpu_weight_zstd_validate  = params.cpu_weight_zstd_validate;
+    mparams.cpu_weight_zstd_threads   = params.cpu_weight_zstd_compress_threads;
 
     return mparams;
 }
@@ -1523,6 +1524,9 @@ struct llama_context_params common_context_params_to_llama(const common_params &
 
     cparams.type_k = params.cache_type_k;
     cparams.type_v = params.cache_type_v;
+
+    cparams.kv_zstd_level    = params.kv_zstd_level;
+    cparams.kv_zstd_frame_kb = params.kv_zstd_frame_kb;
 
     return cparams;
 }

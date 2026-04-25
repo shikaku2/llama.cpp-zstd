@@ -106,9 +106,6 @@ struct ggml_backend_cpu_context {
     ggml_abort_callback abort_callback;
     void *              abort_callback_data;
 
-    void (* pre_node_callback)(struct ggml_tensor * node, void * user_data);
-    void *  pre_node_callback_data;
-
     bool                use_ref;  // use reference implementation
 };
 
@@ -148,8 +145,6 @@ static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend
 
     cpu_plan->cplan.abort_callback        = cpu_ctx->abort_callback;
     cpu_plan->cplan.abort_callback_data   = cpu_ctx->abort_callback_data;
-    cpu_plan->cplan.pre_node_callback     = cpu_ctx->pre_node_callback;
-    cpu_plan->cplan.pre_node_callback_data = cpu_ctx->pre_node_callback_data;
     cpu_plan->cplan.use_ref               = cpu_ctx->use_ref;
 
     return cpu_plan;
@@ -190,8 +185,6 @@ static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t backend, s
 
     cplan.abort_callback        = cpu_ctx->abort_callback;
     cplan.abort_callback_data   = cpu_ctx->abort_callback_data;
-    cplan.pre_node_callback     = cpu_ctx->pre_node_callback;
-    cplan.pre_node_callback_data = cpu_ctx->pre_node_callback_data;
     cplan.use_ref               = cpu_ctx->use_ref;
 
     return ggml_graph_compute(cgraph, &cplan);
@@ -236,8 +229,6 @@ ggml_backend_t ggml_backend_cpu_init(void) {
     ctx->work_size             = 0;
     ctx->abort_callback        = NULL;
     ctx->abort_callback_data   = NULL;
-    ctx->pre_node_callback     = NULL;
-    ctx->pre_node_callback_data = NULL;
     ctx->use_ref               = false;
 
     ggml_backend_t cpu_backend = new ggml_backend {
@@ -286,13 +277,6 @@ void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_
     ctx->abort_callback_data = abort_callback_data;
 }
 
-void ggml_backend_cpu_set_pre_node_callback(ggml_backend_t backend_cpu,
-        void (*pre_node_callback)(struct ggml_tensor *, void *), void * user_data) {
-    GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));
-    struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
-    ctx->pre_node_callback      = pre_node_callback;
-    ctx->pre_node_callback_data = user_data;
-}
 
 void ggml_backend_cpu_set_use_ref(ggml_backend_t backend_cpu, bool use_ref) {
     GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));

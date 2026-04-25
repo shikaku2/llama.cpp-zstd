@@ -326,6 +326,7 @@ extern "C" {
         float   cpu_weight_zstd_threshold;  // skip tensors with ratio > threshold (default 0.90)
         int32_t cpu_weight_zstd_frame_kb;   // seekable frame size in KB (default 256)
         bool    cpu_weight_zstd_validate;   // debug: round-trip check after compression
+        int32_t cpu_weight_zstd_threads;    // threads to use during compression (-1 = hw concurrency)
     };
 
     struct llama_sampler_seq_config {
@@ -369,6 +370,10 @@ extern "C" {
         // currently works only with CPU execution
         ggml_abort_callback abort_callback;
         void *              abort_callback_data;
+
+        // Async zstd compression of CPU-resident KV cache (0 = disabled, 1-19 = level)
+        int32_t kv_zstd_level;     // compression level; 0 = disabled
+        int32_t kv_zstd_frame_kb;  // seekable frame size in KB (default 256)
 
         // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
         bool embeddings;  // if true, extract embeddings (together with logits)

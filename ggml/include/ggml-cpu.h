@@ -20,10 +20,6 @@ extern "C" {
         ggml_abort_callback abort_callback;
         void *              abort_callback_data;
 
-        // called by thread 0 before each node executes; a barrier follows so all threads see pointer updates
-        void (* pre_node_callback)(struct ggml_tensor * node, void * user_data);
-        void *  pre_node_callback_data;
-
         // use only reference implementations
         bool use_ref;
     };
@@ -138,8 +134,6 @@ extern "C" {
     GGML_BACKEND_API void ggml_backend_cpu_set_n_threads     (ggml_backend_t backend_cpu, int n_threads);
     GGML_BACKEND_API void ggml_backend_cpu_set_threadpool    (ggml_backend_t backend_cpu, ggml_threadpool_t threadpool);
     GGML_BACKEND_API void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback abort_callback, void * abort_callback_data);
-    GGML_BACKEND_API void ggml_backend_cpu_set_pre_node_callback(ggml_backend_t backend_cpu,
-                              void (*pre_node_callback)(struct ggml_tensor *, void *), void * user_data);
 
     GGML_BACKEND_API void ggml_backend_cpu_set_use_ref(ggml_backend_t backend_cpu, bool use_ref);
 

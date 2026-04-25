@@ -2514,6 +2514,46 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
+        {"--zstd-compress-threads"}, "N",
+        string_format("number of threads used during initial zstd weight compression (default: %d); more threads compress faster but raise peak RSS proportionally", 1),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::runtime_error("--zstd-compress-threads: must be >= 1");
+            }
+            params.cpu_weight_zstd_compress_threads = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd-frame-kb"}, "KB",
+        string_format("seekable zstd frame size in KB (default: %d)", 256),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::runtime_error("--cpu-weight-zstd-frame-kb: must be >= 1");
+            }
+            params.cpu_weight_zstd_frame_kb = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-kv-cache"}, "LEVEL",
+        "compress CPU-resident KV cache with zstd asynchronously in the background (level 1-19); reduces steady-state RAM between decode calls at the cost of compression/decompression overhead",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 19) {
+                throw std::runtime_error("--zstd-kv-cache: level must be 1-19");
+            }
+            params.kv_zstd_level = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-kv-cache-frame-kb"}, "KB",
+        string_format("KV cache zstd frame size in KB (default: %d)", 256),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::runtime_error("--zstd-kv-cache-frame-kb: must be >= 1");
+            }
+            params.kv_zstd_frame_kb = value;
+        }
+    ));
+    add_opt(common_arg(
         {"--override-kv"}, "KEY=TYPE:VALUE,...",
         "advanced option to override model metadata by key. to specify multiple overrides, either use comma-separated values.\n"
         "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false,tokenizer.ggml.add_eos_token=bool:false",

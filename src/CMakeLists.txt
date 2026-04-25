@@ -12,6 +12,7 @@ set(LLAMA_ZSTD_SOURCES "")
 if (LLAMA_ZSTD)
     set(LLAMA_ZSTD_SOURCES
         llama-weight-zstd.cpp
+        llama-kv-zstd.cpp
         ../vendor/zstd-seekable/zstdseek_compress.c
         ../vendor/zstd-seekable/zstdseek_decompress.c)
 endif()
@@ -76,6 +77,8 @@ if (LLAMA_ZSTD)
     endif()
     # vendor/zstd-seekable provides its own mem.h stub; system headers supply xxhash.h
     target_include_directories(llama PRIVATE ../vendor/zstd-seekable /usr/include)
+    # Internal ggml-cpu headers needed for the extra_buffer_type streaming hook
+    target_include_directories(llama PRIVATE ../ggml/src ../ggml/src/ggml-cpu)
     target_compile_definitions(llama PUBLIC  GGML_USE_ZSTD)
     target_compile_definitions(ggml PUBLIC   GGML_USE_ZSTD)
 endif()
