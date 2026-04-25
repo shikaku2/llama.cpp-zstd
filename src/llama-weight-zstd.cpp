@@ -404,15 +404,16 @@ bool zstd_streaming_traits::compute_forward_id(
     }
 
     // ---- Activation F16 conversion ----
-    // Convert src1 (F32) -> F16 once per call, partitioning ne11 across
-    // threads.  Output buffer is thread_local so each thread owns its rows;
-    // we exchange via barrier.  For typical batches this is microseconds.
+    // Each thread independently converts ALL rows so that the worker loop
+    // below can read any row regardless of which thread processes a given job.
+    // Using thread_local avoids the allocation on every call while keeping the
+    // data private (no sharing needed — every thread writes all rows itself).
     thread_local std::vector<ggml_fp16_t> act_f16;
     const size_t total_act = (size_t)ne10 * (size_t)ne11 * (size_t)ne12;
     act_f16.resize(total_act);
 
     for (int64_t i12 = 0; i12 < ne12; ++i12) {
-        for (int64_t i11 = ith; i11 < ne11; i11 += nth) {
+        for (int64_t i11 = 0; i11 < ne11; ++i11) {
             const float * s = (const float *)((const char *)src1->data
                                               + i12 * src1->nb[2]
                                               + i11 * src1->nb[1]);

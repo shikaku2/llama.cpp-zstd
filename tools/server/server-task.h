@@ -593,16 +593,25 @@ struct server_prompt {
     server_tokens tokens;
 
     std::vector<uint8_t> data;
+    size_t raw_size = 0; // uncompressed byte count when data is ZSTD-compressed; 0 = not compressed
 
     std::list<server_prompt_checkpoint> checkpoints;
 
+    // actual RAM footprint (compressed data size + checkpoint sizes)
     size_t size() const {
         size_t res = data.size();
-
         for (const auto & checkpoint : checkpoints) {
             res += checkpoint.size();
         }
+        return res;
+    }
 
+    // logical size before compression
+    size_t decompressed_size() const {
+        size_t res = raw_size > 0 ? raw_size : data.size();
+        for (const auto & checkpoint : checkpoints) {
+            res += checkpoint.size();
+        }
         return res;
     }
 
@@ -614,15 +623,17 @@ struct server_prompt {
         return server_prompt {
             tokens.clone(),
             data,
+            raw_size,
             checkpoints
         };
     }
 };
 
 struct server_prompt_cache {
-    server_prompt_cache(int32_t limit_size_mib, size_t limit_tokens) {
+    server_prompt_cache(int32_t limit_size_mib, size_t limit_tokens, int zstd_level = 0) {
         this->limit_size   = 1024ull*1024ull*(limit_size_mib < 0 ? 0 : limit_size_mib);
         this->limit_tokens = limit_tokens;
+        this->zstd_level   = zstd_level;
     }
 
     std::list<server_prompt> states;
@@ -632,6 +643,9 @@ struct server_prompt_cache {
 
     // in tokens, 0 = no limit
     size_t limit_tokens = 0;
+
+    // ZSTD compression level for slot state blobs (0 = disabled)
+    int zstd_level = 0;
 
     size_t size() const;
 

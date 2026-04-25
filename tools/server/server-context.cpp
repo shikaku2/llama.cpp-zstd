@@ -15,6 +15,10 @@
 #include "mtmd.h"
 #include "mtmd-helper.h"
 
+#ifdef GGML_USE_ZSTD
+#include <zstd.h>
+#endif
+
 #include <algorithm>
 #include <cstddef>
 #include <cinttypes>
@@ -145,6 +149,23 @@ struct server_slot {
         }
 
         llama_state_seq_get_data_ext(ctx, cur->data.data(), cur_size, id, 0);
+
+#ifdef GGML_USE_ZSTD
+        if (prompt_cache.zstd_level > 0) {
+            const size_t raw   = cur->data.size();
+            const size_t bound = ZSTD_compressBound(raw);
+            std::vector<uint8_t> compressed(bound);
+            const size_t csize = ZSTD_compress(compressed.data(), bound, cur->data.data(), raw, prompt_cache.zstd_level);
+            if (!ZSTD_isError(csize) && csize < raw) {
+                compressed.resize(csize);
+                compressed.shrink_to_fit();
+                cur->data     = std::move(compressed);
+                cur->raw_size = raw;
+                SRV_WRN(" - compressed slot state: %.3f MiB -> %.3f MiB (%.1f%%)\n",
+                        raw / (1024.0*1024.0), csize / (1024.0*1024.0), 100.0*csize/raw);
+            }
+        }
+#endif
     }
 
     bool prompt_load(server_prompt_cache & prompt_cache, const server_tokens & tokens) {
@@ -938,7 +959,7 @@ private:
             }
             SRV_WRN("%s", "use `--cache-ram 0` to disable the prompt cache\n");
 
-            prompt_cache = std::make_unique<server_prompt_cache>(params_base.cache_ram_mib, n_ctx);
+            prompt_cache = std::make_unique<server_prompt_cache>(params_base.cache_ram_mib, n_ctx, params_base.cache_ram_zstd);
         } else {
             SRV_WRN("%s", "prompt cache is disabled - use `--cache-ram N` to enable it\n");
         }
