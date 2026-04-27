@@ -2042,7 +2042,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             "KV cache data type for K\n"
             "allowed values: %s, zstd[:L1[-L2]]\n"
             "  zstd:L       — first-pass compression at level L\n"
-            "  zstd:L1-L2   — first pass at L1, second pass at L2 (alias for --kv-zstd-recompress)\n"
+            "  zstd:L1-L2   — first pass at L1, second pass at L2 (alias for --zstd-kv-recompress)\n"
             "  type,zstd:…  — set quant type and compression together\n"
             "(default: %s)",
             get_all_kv_cache_types().c_str(),
@@ -2075,7 +2075,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             "KV cache data type for V\n"
             "allowed values: %s, zstd[:L1[-L2]]\n"
             "  zstd:L       — first-pass compression at level L\n"
-            "  zstd:L1-L2   — first pass at L1, second pass at L2 (alias for --kv-zstd-recompress)\n"
+            "  zstd:L1-L2   — first pass at L1, second pass at L2 (alias for --zstd-kv-recompress)\n"
             "  type,zstd:…  — set quant type and compression together\n"
             "(default: %s)",
             get_all_kv_cache_types().c_str(),
@@ -2624,7 +2624,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
-        {"--kv-zstd-recompress"}, "LEVEL",
+        {"--zstd-kv-recompress"}, "LEVEL",
         "after the first-pass KV cache compression completes, run a second pass at this\n"
         "level (1-19) for better compression ratio; requires --zstd-kv-cache\n"
         "recommended levels (measured on 100 MB float16 data, single thread):\n"
@@ -2633,7 +2633,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         "(default: 0 = single pass only)",
         [](common_params & params, int value) {
             if (value < 1 || value > 19) {
-                throw std::runtime_error("--kv-zstd-recompress: level must be 1-19");
+                throw std::runtime_error("--zstd-kv-recompress: level must be 1-19");
             }
             params.kv_zstd_recompress = value;
         }
