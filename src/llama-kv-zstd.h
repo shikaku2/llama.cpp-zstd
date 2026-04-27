@@ -32,21 +32,23 @@ struct kv_zstd_tensor {
     size_t    raw_bytes  = 0;
     size_t    frame_bytes = 0;
     int32_t   n_frames   = 0;
+    uint32_t  n_ctx      = 0;  // total cache slots (used to compute bytes_per_token)
 
     std::vector<std::vector<uint8_t>> cframes;
     std::atomic<int32_t> n_done{0};
 
     kv_zstd_tensor() = default;
-    kv_zstd_tensor(uint8_t * raw, size_t raw_bytes, size_t frame_bytes);
+    kv_zstd_tensor(uint8_t * raw, size_t raw_bytes, size_t frame_bytes, uint32_t n_ctx);
 
     // Move only ever happens before the bg thread starts, so a value-copy of the atomic is safe.
     kv_zstd_tensor(kv_zstd_tensor && o) noexcept
         : raw(o.raw), raw_bytes(o.raw_bytes), frame_bytes(o.frame_bytes), n_frames(o.n_frames),
-          cframes(std::move(o.cframes)), n_done(o.n_done.load(std::memory_order_relaxed)) {}
+          n_ctx(o.n_ctx), cframes(std::move(o.cframes)),
+          n_done(o.n_done.load(std::memory_order_relaxed)) {}
 
     kv_zstd_tensor & operator=(kv_zstd_tensor && o) noexcept {
         raw = o.raw; raw_bytes = o.raw_bytes; frame_bytes = o.frame_bytes; n_frames = o.n_frames;
-        cframes = std::move(o.cframes);
+        n_ctx = o.n_ctx; cframes = std::move(o.cframes);
         n_done.store(o.n_done.load(std::memory_order_relaxed), std::memory_order_relaxed);
         return *this;
     }
@@ -69,12 +71,20 @@ struct kv_zstd_tensor {
 struct kv_zstd_state {
     std::vector<kv_zstd_tensor> tensors;
     int   level            = 1;
-    float threshold        = 0.90f; // skip frame if compressed/raw ratio exceeds this
+    float threshold        = 1.00f; // skip frame if compressed/raw ratio exceeds this (1.0 = always compress)
     int   recompress_level = 0;     // 0 = single pass; 1-19 = second-pass target level
 
+    uint32_t n_used = 0;  // set by start(): highest used slot index + 1
+
     void init(int zstd_level, float thresh, int recompress = 0);
-    void sync();   // must be called before decode: ensures raw buffers are valid
-    void start();  // must be called after decode: signals bg thread
+    void sync();                   // must be called before decode: ensures raw buffers are valid
+    void start(uint32_t n_used);   // must be called after decode: signals bg thread
+
+    // Sum of compressed frame sizes across all tensors.
+    // This is the real "compressed KV data size" — independent of MADV_DONTNEED
+    // and OS-level zero-page accounting.
+    size_t compressed_bytes() const;
+    size_t raw_used_bytes()   const;  // n_used * sum(bytes_per_token)
 
     ~kv_zstd_state();
 

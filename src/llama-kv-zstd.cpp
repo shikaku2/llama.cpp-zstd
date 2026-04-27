@@ -13,8 +13,8 @@
 // kv_zstd_tensor
 // ---------------------------------------------------------------------------
 
-kv_zstd_tensor::kv_zstd_tensor(uint8_t * raw_, size_t raw_bytes_, size_t frame_bytes_)
-    : raw(raw_), raw_bytes(raw_bytes_), frame_bytes(frame_bytes_) {
+kv_zstd_tensor::kv_zstd_tensor(uint8_t * raw_, size_t raw_bytes_, size_t frame_bytes_, uint32_t n_ctx_)
+    : raw(raw_), raw_bytes(raw_bytes_), frame_bytes(frame_bytes_), n_ctx(n_ctx_) {
     n_frames = (int32_t)((raw_bytes + frame_bytes - 1) / frame_bytes);
     cframes.resize(n_frames);
 }
@@ -37,16 +37,31 @@ void kv_zstd_state::bg_loop() {
 
         auto compress_all = [&]() {
             const int32_t total_passes = (recompress_level > 0) ? 2 : 1;
+            const uint32_t nu = n_used;
 
             for (auto & t : tensors) {
+                // Limit compression to the actually-written portion of the tensor.
+                // bytes_per_slot = raw_bytes / n_ctx; compress only nu slots worth.
+                // nu == 0 means cache is empty — nothing to compress.
+                int32_t n_frames_used;
+                if (nu == 0 || t.n_ctx == 0) {
+                    n_frames_used = 0;
+                } else if (nu >= t.n_ctx) {
+                    n_frames_used = t.n_frames;
+                } else {
+                    size_t used_bytes = (size_t)nu * t.raw_bytes / t.n_ctx;
+                    n_frames_used = (int32_t)((used_bytes + t.frame_bytes - 1) / t.frame_bytes);
+                    n_frames_used = std::min(n_frames_used, t.n_frames);
+                }
+
                 int32_t done  = t.n_done.load(std::memory_order_relaxed);
-                int32_t total = t.n_frames * total_passes;
+                int32_t total = n_frames_used * total_passes;
 
                 while (done < total) {
                     if (interrupted.load(std::memory_order_acquire)) { return; }
 
-                    int32_t i           = done % t.n_frames;
-                    bool    second_pass = (done >= t.n_frames);
+                    int32_t i           = done % n_frames_used;
+                    bool    second_pass = (done >= n_frames_used);
                     size_t  off         = (size_t)i * t.frame_bytes;
                     size_t  sz          = std::min(t.frame_bytes, t.raw_bytes - off);
                     int     cur_level   = second_pass ? recompress_level : level;
@@ -65,9 +80,11 @@ void kv_zstd_state::bg_loop() {
                         }
                         if ((float)csize < threshold * (float)sz) {
                             t.cframes[i].resize(csize);
+                            t.cframes[i].shrink_to_fit();
                             madvise(t.raw + off, sz, MADV_DONTNEED);
                         } else {
                             t.cframes[i].clear(); // not worth it; keep raw valid
+                            t.cframes[i].shrink_to_fit();
                         }
 
                     } else {
@@ -100,6 +117,7 @@ void kv_zstd_state::bg_loop() {
 
                         if (better) {
                             new_cf.resize(csize);
+                            new_cf.shrink_to_fit();
                             t.cframes[i] = std::move(new_cf);
                         }
                         // Release raw pages if this frame is now compressed by either pass.
@@ -114,6 +132,19 @@ void kv_zstd_state::bg_loop() {
             }
         };
         compress_all();
+
+        // Log actual compression stats (independent of OS RSS accounting).
+        if (!interrupted.load(std::memory_order_acquire)) {
+            size_t raw  = raw_used_bytes();
+            size_t comp = compressed_bytes();
+            if (raw > 0) {
+                LLAMA_LOG_INFO("kv-zstd: compressed %.1f MiB -> %.1f MiB (%.1f%%) [n_used=%u]\n",
+                    raw  / (1024.0 * 1024.0),
+                    comp / (1024.0 * 1024.0),
+                    raw > 0 ? 100.0 * comp / raw : 0.0,
+                    (unsigned)n_used);
+            }
+        }
     }
 }
 
@@ -155,7 +186,7 @@ void kv_zstd_state::sync() {
     // but cframes has exactly n_frames entries.
     size_t bytes_restored = 0;
     for (auto & t : tensors) {
-        int32_t done        = t.n_done.load(std::memory_order_acquire);
+        int32_t done         = t.n_done.load(std::memory_order_acquire);
         int32_t n_compressed = std::min(done, t.n_frames);
         for (int32_t i = 0; i < n_compressed; i++) {
             if (!t.cframes[i].empty()) {
@@ -184,9 +215,30 @@ void kv_zstd_state::sync() {
     interrupted.store(false, std::memory_order_release);
 }
 
-void kv_zstd_state::start() {
+size_t kv_zstd_state::compressed_bytes() const {
+    size_t total = 0;
+    for (auto & t : tensors) {
+        for (auto & cf : t.cframes) {
+            total += cf.size();
+        }
+    }
+    return total;
+}
+
+size_t kv_zstd_state::raw_used_bytes() const {
+    size_t total = 0;
+    for (auto & t : tensors) {
+        if (t.n_ctx == 0) { continue; }
+        uint32_t nu = std::min(n_used, t.n_ctx);
+        total += (size_t)nu * t.raw_bytes / t.n_ctx;
+    }
+    return total;
+}
+
+void kv_zstd_state::start(uint32_t nu) {
     {
         std::lock_guard<std::mutex> lk(mu);
+        n_used     = nu;
         work_ready = true;
     }
     wake_cv.notify_one();

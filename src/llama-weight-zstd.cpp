@@ -673,7 +673,7 @@ void llama_weight_zstd_compress(struct llama_model & model, const struct llama_m
 
     const int   level      = params.cpu_weight_zstd_level;
     const float threshold  = params.cpu_weight_zstd_threshold;
-    const int   frame_kb   = params.cpu_weight_zstd_frame_kb > 0 ? params.cpu_weight_zstd_frame_kb : 256;
+    const int   frame_kb   = params.cpu_weight_zstd_frame_kb > 0 ? params.cpu_weight_zstd_frame_kb : 32;
     const bool  validate   = params.cpu_weight_zstd_validate;
 
     LLAMA_LOG_INFO("%s: compressing CPU weights with zstd level=%d threshold=%.2f frame_kb=%d\n",
@@ -1009,9 +1009,9 @@ llama_zstd_ctx_state * llama_zstd_ctx_init(
         LLAMA_LOG_INFO("llama_zstd_ctx_init: hot cache = %.1f MB (LLAMA_ZSTD_CACHE_MB override; default would have been %.1f MB)\n",
                        ctx->cache.max_bytes / 1e6, default_sz / 1e6);
     } else {
-        ctx->cache.max_bytes = default_sz;
-        LLAMA_LOG_INFO("llama_zstd_ctx_init: hot cache = %.1f MB (bytes_saved = %.1f MB)\n",
-                       ctx->cache.max_bytes / 1e6, saved / 1e6);
+        ctx->cache.max_bytes = 0;
+        LLAMA_LOG_INFO("llama_zstd_ctx_init: hot cache = 0 MB (default; set LLAMA_ZSTD_CACHE_MB to enable; bytes_saved = %.1f MB)\n",
+                       saved / 1e6);
     }
 
     // Build name -> tensor* lookup from the model.

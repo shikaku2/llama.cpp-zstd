@@ -167,3 +167,7 @@ bench-zstd-ram.sh
 compare_kv
 compare_kv.cpp
 save_kv_caches.sh
+bench-kv-compression.py
+bench-kv-compress-verify.py
+junktext.txt
+PR_NOTES.md

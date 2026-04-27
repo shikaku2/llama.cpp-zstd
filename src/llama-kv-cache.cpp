@@ -2529,12 +2529,15 @@ void llama_kv_cache::kv_zstd_init(int level, size_t frame_kb, float threshold, i
         return;
     }
 
+    // n_ctx = total cache slots (same for all layers).
+    uint32_t n_ctx = v_cells.empty() ? 0 : (uint32_t)v_cells[0].size();
+
     zstd = std::make_unique<kv_zstd_state>();
     for (const auto & layer : layers) {
         for (auto * t : {layer.k, layer.v}) {
             if (t && t->buffer && ggml_backend_buffer_is_host(t->buffer)) {
                 zstd->tensors.emplace_back(
-                    (uint8_t *)t->data, ggml_nbytes(t), frame_kb * 1024);
+                    (uint8_t *)t->data, ggml_nbytes(t), frame_kb * 1024, n_ctx);
             }
         }
     }
@@ -2557,7 +2560,14 @@ void llama_kv_cache::kv_zstd_pre_decode() {
 }
 
 void llama_kv_cache::kv_zstd_post_decode() {
-    if (zstd) { zstd->start(); }
+    if (!zstd) { return; }
+    // Pass the highest used slot index + 1 so the bg thread only compresses
+    // actually-written data, not the entire pre-allocated buffer.
+    uint32_t used_max = 0;
+    for (const auto & cells : v_cells) {
+        used_max = std::max(used_max, cells.used_max_p1());
+    }
+    zstd->start(used_max);
 }
 
 #endif // GGML_USE_ZSTD
