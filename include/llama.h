@@ -322,10 +322,10 @@ extern "C" {
 
         // zstd seekable weight compression (0 = disabled, 1-19 = zstd level)
         int32_t cpu_weight_zstd_level;      // compress CPU-backend tensors, decompress before compute
-        float   cpu_weight_zstd_threshold;  // skip tensors with ratio > threshold (default 0.90)
+        float   cpu_weight_zstd_threshold;  // skip tensors with ratio > threshold (default 0.99)
         int32_t cpu_weight_zstd_frame_kb;   // seekable frame size in KB (default 256)
         bool    cpu_weight_zstd_validate;   // debug: round-trip check after compression
-        int32_t cpu_weight_zstd_threads;    // threads to use during compression (-1 = hw concurrency)
+        int32_t cpu_weight_zstd_threads;    // threads to use during compression (0 = default 1; more threads compress faster but raise peak RAM)
     };
 
     struct llama_sampler_seq_config {

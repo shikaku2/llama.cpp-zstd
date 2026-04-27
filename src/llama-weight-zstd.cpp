@@ -676,6 +676,11 @@ void llama_weight_zstd_compress(struct llama_model & model, const struct llama_m
     const int   frame_kb   = params.cpu_weight_zstd_frame_kb > 0 ? params.cpu_weight_zstd_frame_kb : 32;
     const bool  validate   = params.cpu_weight_zstd_validate;
 
+    {
+        rss_stats rss = read_rss();
+        LLAMA_LOG_INFO("%s: RAM before compression: rss=%zu MB peak=%zu MB\n",
+                       __func__, rss.cur_mb, rss.peak_mb);
+    }
     LLAMA_LOG_INFO("%s: compressing CPU weights with zstd level=%d threshold=%.2f frame_kb=%d\n",
                    __func__, level, threshold, frame_kb);
 
@@ -714,7 +719,7 @@ void llama_weight_zstd_compress(struct llama_model & model, const struct llama_m
 
     const int n_threads = params.cpu_weight_zstd_threads > 0
             ? params.cpu_weight_zstd_threads
-            : std::max(1, (int)std::thread::hardware_concurrency());
+            : 1;  // default 1: compression is memory-heavy; multithreading peaks RAM, defeating the purpose
 
     size_t bytes_before = 0;
     size_t bytes_after  = 0;
@@ -1097,15 +1102,17 @@ llama_zstd_ctx_state * llama_zstd_ctx_init(
                        n_streaming);
     }
 
-    // Persistent worker pool for parallel LRU-path decompression.  Size it to
-    // hardware_concurrency - 1 so caller thread participation brings us to full
-    // core count without oversubscription.
-    unsigned n_pool = std::thread::hardware_concurrency();
-    if (n_pool > 1) n_pool -= 1;
-    if (n_pool > 0) {
-        ctx->pool.start(n_pool);
-        LLAMA_LOG_INFO("llama_zstd_ctx_init: decompress pool = %u workers\n", n_pool);
+    // Persistent worker pool for parallel graph-level decompression.  Default 1
+    // to avoid spawning uncontrolled threads on top of the user's -t setting.
+    // Override via LLAMA_ZSTD_DECOMP_THREADS if more parallelism is desired.
+    unsigned n_pool = 1;
+    const char * env_dt = std::getenv("LLAMA_ZSTD_DECOMP_THREADS");
+    if (env_dt) {
+        long long v = atoll(env_dt);
+        if (v > 0) n_pool = (unsigned)v;
     }
+    ctx->pool.start(n_pool);
+    LLAMA_LOG_INFO("llama_zstd_ctx_init: decompress pool = %u workers\n", n_pool);
 
     {
         rss_stats rss = read_rss();

@@ -171,3 +171,4 @@ bench-kv-compression.py
 bench-kv-compress-verify.py
 junktext.txt
 PR_NOTES.md
+bench-weight-zstd.py
