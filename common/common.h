@@ -447,7 +447,6 @@ struct common_params {
     enum llama_flash_attn_type   flash_attn_type   = LLAMA_FLASH_ATTN_TYPE_AUTO; // whether to use Flash Attention
 
     int   cpu_weight_zstd_level              = 0;      // 0 = disabled, 1-19 = compression level
-    int   igpu_weight_zstd_level             = 0;
     float cpu_weight_zstd_threshold          = 0.99f;  // skip tensor if compressed_size/original_size > threshold
     bool  cpu_weight_zstd_validate           = false;
     int   cpu_weight_zstd_compress_threads   = 1;      // threads used during initial compression (default 1 to keep peak RAM low)

@@ -322,7 +322,6 @@ extern "C" {
 
         // zstd seekable weight compression (0 = disabled, 1-19 = zstd level)
         int32_t cpu_weight_zstd_level;      // compress CPU-backend tensors, decompress before compute
-        int32_t igpu_weight_zstd_level;     // same but for unified-memory iGPU tensors
         float   cpu_weight_zstd_threshold;  // skip tensors with ratio > threshold (default 0.90)
         int32_t cpu_weight_zstd_frame_kb;   // seekable frame size in KB (default 256)
         bool    cpu_weight_zstd_validate;   // debug: round-trip check after compression
