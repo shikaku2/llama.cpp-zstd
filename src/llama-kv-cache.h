@@ -3,6 +3,7 @@
 #include "llama-batch.h"
 #include "llama-graph.h"
 #include "llama-kv-cells.h"
+#include "llama-kv-zstd.h"
 #include "llama-memory.h"
 
 #ifdef GGML_USE_ZSTD
@@ -263,6 +264,10 @@ private:
 
     // this is the SWA type of the cache - not to be confused with the model SWA type
     const llama_swa_type swa_type = LLAMA_SWA_TYPE_NONE;
+
+#ifdef GGML_USE_ZSTD
+    std::unique_ptr<kv_zstd_state> zstd;
+#endif
 
     // ggml contexts for the KV cache along with the allocated backend buffers:
     std::vector<std::pair<ggml_context_ptr, ggml_backend_buffer_ptr>> ctxs_bufs;

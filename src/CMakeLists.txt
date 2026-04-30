@@ -51,6 +51,11 @@ add_library(llama
             ${LLAMA_ZSTD_SOURCES}
             )
 
+find_package(PkgConfig QUIET)
+if (PkgConfig_FOUND)
+    pkg_check_modules(ZSTD QUIET libzstd)
+endif()
+
 set_target_properties(llama PROPERTIES
     VERSION ${LLAMA_INSTALL_VERSION}
     SOVERSION 0

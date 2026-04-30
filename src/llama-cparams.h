@@ -14,6 +14,9 @@ struct llama_cparams {
     uint32_t n_seq_max;
     int32_t  n_threads;       // number of threads to use for generation
     int32_t  n_threads_batch; // number of threads to use for batch processing
+    int32_t  kv_zstd_level;
+    int32_t  kv_zstd_frame_kb;
+    float    kv_zstd_threshold;
 
     float rope_freq_base;
     float rope_freq_scale;

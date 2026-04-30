@@ -45,6 +45,9 @@ llama_context::llama_context(
 
     cparams.n_threads        = params.n_threads;
     cparams.n_threads_batch  = params.n_threads_batch;
+    cparams.kv_zstd_level    = params.kv_zstd_level;
+    cparams.kv_zstd_frame_kb = params.kv_zstd_frame_kb;
+    cparams.kv_zstd_threshold = params.kv_zstd_threshold;
     cparams.yarn_ext_factor  = params.yarn_ext_factor  >= 0.0f ? params.yarn_ext_factor  : hparams.yarn_ext_factor;
     cparams.yarn_attn_factor = params.yarn_attn_factor >= 0.0f ? params.yarn_attn_factor : hparams.yarn_attn_factor;
     cparams.yarn_beta_fast   = params.yarn_beta_fast   >= 0.0f ? params.yarn_beta_fast   : hparams.yarn_beta_fast;
@@ -1630,6 +1633,7 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
     // handle any pending shifts/copies
     memory_update(false);
+    memory->kv_zstd_pre_decode();
 
     llama_memory_context_ptr mctx;
 
@@ -1898,6 +1902,8 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
     // wait for the computation to finish (automatically done when obtaining the model output)
     //synchronize();
+
+    memory->kv_zstd_post_decode();
 
     return 0;
 }
@@ -2935,6 +2941,9 @@ llama_context_params llama_context_default_params() {
         /*.cb_eval_user_data           =*/ nullptr,
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
+        /*.kv_zstd_level               =*/ 0,
+        /*.kv_zstd_frame_kb            =*/ 256,
+        /*.kv_zstd_threshold           =*/ 1.00f,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
         /*.kv_zstd_level               =*/ 0,
