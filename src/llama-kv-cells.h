@@ -31,6 +31,11 @@ struct llama_kv_cell_ext {
 // TODO: add unit tests
 class llama_kv_cells {
 public:
+    struct used_range {
+        uint32_t begin;
+        uint32_t end;
+    };
+
     void reset() {
         for (uint32_t i = 0; i < pos.size(); ++i) {
             pos[i]   = -1;
@@ -78,6 +83,33 @@ public:
 
     uint32_t get_used() const {
         return used.size();
+    }
+
+    std::vector<used_range> used_ranges() const {
+        std::vector<used_range> ranges;
+
+        if (used.empty()) {
+            return ranges;
+        }
+
+        auto it = used.begin();
+        uint32_t begin = *it;
+        uint32_t end   = begin + 1;
+
+        for (++it; it != used.end(); ++it) {
+            const uint32_t cur = *it;
+            if (cur == end) {
+                ++end;
+                continue;
+            }
+
+            ranges.push_back({ begin, end });
+            begin = cur;
+            end   = cur + 1;
+        }
+
+        ranges.push_back({ begin, end });
+        return ranges;
     }
 
     // the index of the first cell that is used

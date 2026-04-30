@@ -2047,6 +2047,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(
+        {"--zstd-kv-cache"}, "LEVEL",
+        "ZSTD compression level for CPU-resident KV cache frames (1-19, 0 = disabled; recommended: 1)",
+        [](common_params & params, int value) {
+            if (value < 0 || value > 19) {
+                throw std::invalid_argument("ZSTD KV cache level must be between 0 and 19");
+            }
+            params.kv_zstd_level = value;
+        }
+    ).set_env("LLAMA_ARG_ZSTD_KV_CACHE"));
+    add_opt(common_arg(
         {"--hellaswag"},
         "compute HellaSwag score over random tasks from datafile supplied with -f",
         [](common_params & params) {

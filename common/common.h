@@ -557,6 +557,9 @@ struct common_params {
 
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
+    int32_t kv_zstd_level = 0;              // ZSTD compression level for CPU KV cache, 0 = disabled
+    int32_t kv_zstd_frame_kb = 256;         // frame size for CPU KV cache compression
+    float   kv_zstd_threshold = 1.00f;      // skip frames above this compressed/raw ratio
 
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 

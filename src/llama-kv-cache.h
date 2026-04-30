@@ -3,8 +3,10 @@
 #include "llama-batch.h"
 #include "llama-graph.h"
 #include "llama-kv-cells.h"
+#include "llama-kv-zstd.h"
 #include "llama-memory.h"
 
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -143,6 +145,10 @@ public:
     void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
     void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
 
+    void kv_zstd_init(int level, size_t frame_kb, float threshold) override;
+    void kv_zstd_pre_decode() override;
+    void kv_zstd_post_decode() override;
+
     //
     // llama_kv_cache specific API
     //
@@ -252,6 +258,10 @@ private:
 
     // this is the SWA type of the cache - not to be confused with the model SWA type
     const llama_swa_type swa_type = LLAMA_SWA_TYPE_NONE;
+
+#ifdef GGML_USE_ZSTD
+    std::unique_ptr<kv_zstd_state> zstd;
+#endif
 
     // ggml contexts for the KV cache along with the allocated backend buffers:
     std::vector<std::pair<ggml_context_ptr, ggml_backend_buffer_ptr>> ctxs_bufs;

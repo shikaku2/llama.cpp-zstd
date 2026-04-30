@@ -357,6 +357,10 @@ extern "C" {
         enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
         enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
+        int32_t kv_zstd_level;    // ZSTD compression level for CPU KV cache, 0 = disabled [EXPERIMENTAL]
+        int32_t kv_zstd_frame_kb; // frame size in KiB for CPU KV cache compression [EXPERIMENTAL]
+        float   kv_zstd_threshold; // skip frames above this compressed/raw ratio [EXPERIMENTAL]
+
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
         // currently works only with CPU execution

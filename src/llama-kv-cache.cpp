@@ -12,6 +12,7 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <utility>
 
 static bool ggml_is_power_of_2(int n) {
     return (n & (n - 1)) == 0;
@@ -2501,4 +2502,88 @@ void llama_kv_cache_context::set_input_k_rot(ggml_tensor * dst) const {
 
 void llama_kv_cache_context::set_input_v_rot(ggml_tensor * dst) const {
     kv->set_input_v_rot(dst);
+}
+
+void llama_kv_cache::kv_zstd_init(int level, size_t frame_kb, float threshold) {
+#ifdef GGML_USE_ZSTD
+    int n_cpu = 0;
+    for (const auto & layer : layers) {
+        for (auto * t : { layer.k, layer.v }) {
+            if (t && t->buffer && ggml_backend_buffer_is_host(t->buffer)) {
+                n_cpu++;
+            }
+        }
+    }
+
+    if (n_cpu == 0) {
+        LLAMA_LOG_INFO("%s: kv zstd skipped - no CPU-resident KV tensors\n", __func__);
+        return;
+    }
+
+    const uint32_t n_ctx = v_cells.empty() ? 0 : (uint32_t)v_cells[0].size();
+    const size_t frame_bytes = frame_kb > 0 ? frame_kb * 1024 : 256 * 1024;
+
+    zstd = std::make_unique<kv_zstd_state>();
+    for (const auto & layer : layers) {
+        for (auto * t : { layer.k, layer.v }) {
+            if (t && t->buffer && ggml_backend_buffer_is_host(t->buffer)) {
+                const bool is_v = t == layer.v;
+                const bool is_transposed_v = is_v && v_trans;
+                const auto layout = is_transposed_v
+                    ? kv_zstd_tensor_layout::TRANSPOSED_V
+                    : kv_zstd_tensor_layout::SLOT_MAJOR;
+                const uint32_t n_embd = (uint32_t)t->ne[0];
+                const size_t bytes_per_slot = is_transposed_v ? 0 : (size_t)t->nb[1];
+                const size_t bytes_per_el   = is_transposed_v ? ggml_type_size(t->type) : 0;
+
+                zstd->tensors.emplace_back(
+                    (uint8_t *)t->data, ggml_nbytes(t), frame_bytes, n_ctx, n_stream,
+                    n_embd, bytes_per_slot, bytes_per_el, layout);
+            }
+        }
+    }
+
+    size_t total = 0;
+    for (const auto & ts : zstd->tensors) {
+        total += ts.raw_bytes;
+    }
+
+    LLAMA_LOG_INFO("%s: kv zstd level=%d frame_kb=%zu tensors=%d total=%.1f MiB\n",
+        __func__, level, frame_bytes / 1024, n_cpu, total / (1024.0 * 1024.0));
+
+    zstd->init(level, threshold);
+#else
+    (void) level;
+    (void) frame_kb;
+    (void) threshold;
+    LLAMA_LOG_WARN("%s: kv zstd requested but this build was not compiled with libzstd\n", __func__);
+#endif
+}
+
+void llama_kv_cache::kv_zstd_pre_decode() {
+#ifdef GGML_USE_ZSTD
+    if (zstd) {
+        zstd->sync();
+    }
+#endif
+}
+
+void llama_kv_cache::kv_zstd_post_decode() {
+#ifdef GGML_USE_ZSTD
+    if (!zstd) {
+        return;
+    }
+
+    std::vector<kv_zstd_cell_range> ranges;
+    uint32_t n_used = 0;
+    for (uint32_t s = 0; s < v_cells.size(); ++s) {
+        const auto & cells = v_cells[s];
+        n_used += cells.get_used();
+        for (const auto & r : cells.used_ranges()) {
+            ranges.push_back({ s, r.begin, r.end });
+        }
+    }
+
+    zstd->start(std::move(ranges), n_used);
+#endif
 }
