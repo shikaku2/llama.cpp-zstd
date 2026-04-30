@@ -8,6 +8,15 @@ llama_add_compile_flags()
 
 file(GLOB LLAMA_MODELS_SOURCES "models/*.cpp")
 
+set(LLAMA_ZSTD_SOURCES "")
+if (LLAMA_ZSTD)
+    set(LLAMA_ZSTD_SOURCES
+        llama-weight-zstd.cpp
+        llama-kv-zstd.cpp
+        ../vendor/zstd-seekable/zstdseek_compress.c
+        ../vendor/zstd-seekable/zstdseek_decompress.c)
+endif()
+
 add_library(llama
             ../include/llama.h
             llama.cpp
@@ -39,6 +48,7 @@ add_library(llama
             unicode.cpp
             unicode.h
             ${LLAMA_MODELS_SOURCES}
+            ${LLAMA_ZSTD_SOURCES}
             )
 
 find_package(PkgConfig QUIET)
@@ -58,11 +68,24 @@ target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
 target_link_libraries(llama PUBLIC ggml)
 
-if (ZSTD_FOUND)
-    target_sources(llama PRIVATE llama-kv-zstd.cpp)
-    target_include_directories(llama PRIVATE ${ZSTD_INCLUDE_DIRS})
-    target_link_libraries(llama PRIVATE ${ZSTD_LIBRARIES})
-    target_compile_definitions(llama PRIVATE GGML_USE_ZSTD)
+if (LLAMA_ZSTD)
+    find_package(PkgConfig QUIET)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(LIBZSTD libzstd)
+    endif()
+    if (LIBZSTD_FOUND)
+        target_include_directories(llama PRIVATE ${LIBZSTD_INCLUDE_DIRS})
+        target_link_libraries(llama PRIVATE ${LIBZSTD_LIBRARIES})
+    else()
+        find_library(ZSTD_LIB zstd REQUIRED)
+        target_link_libraries(llama PRIVATE ${ZSTD_LIB})
+    endif()
+    # vendor/zstd-seekable provides its own mem.h stub; system headers supply xxhash.h
+    target_include_directories(llama PRIVATE ../vendor/zstd-seekable /usr/include)
+    # Internal ggml-cpu headers needed for the extra_buffer_type streaming hook
+    target_include_directories(llama PRIVATE ../ggml/src ../ggml/src/ggml-cpu)
+    target_compile_definitions(llama PUBLIC  GGML_USE_ZSTD)
+    target_compile_definitions(ggml PUBLIC   GGML_USE_ZSTD)
 endif()
 
 if (BUILD_SHARED_LIBS)

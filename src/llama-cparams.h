@@ -29,6 +29,11 @@ struct llama_cparams {
     float yarn_beta_fast;
     float yarn_beta_slow;
 
+    int32_t kv_zstd_level      = 0;     // 0 = disabled; 1-19 compress KV cache async in background
+    int32_t kv_zstd_frame_kb   = 256;   // seekable frame size for kv compression
+    float   kv_zstd_threshold  = 0.90f; // skip frame if compressed/original ratio exceeds this
+    int32_t kv_zstd_recompress = 0;     // 0 = single pass; 1-19 = second-pass target level
+
     bool embeddings;
     bool causal_attn;
     bool offload_kqv;

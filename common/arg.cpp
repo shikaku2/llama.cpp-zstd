@@ -415,6 +415,28 @@ static std::string get_all_kv_cache_types() {
     return msg.str();
 }
 
+// Returns true if s is "zstd" or starts with "zstd:".
+static bool is_zstd_qualifier(const std::string & s) {
+    return s == "zstd" || (s.size() > 5 && s.substr(0, 5) == "zstd:");
+}
+
+// Parse "zstd", "zstd:L", or "zstd:L1-L2".  Returns {first_pass, recompress}.
+static std::pair<int,int> parse_zstd_levels(const std::string & s, const char * flag) {
+    const std::string body = (s.size() > 5) ? s.substr(5) : "";
+    if (body.empty()) { return {1, 0}; }
+    auto dash = body.find('-');
+    if (dash != std::string::npos) {
+        int l1 = std::stoi(body.substr(0, dash));
+        int l2 = std::stoi(body.substr(dash + 1));
+        if (l1 < 1 || l1 > 19) { throw std::runtime_error(std::string(flag) + ": first zstd level must be 1-19"); }
+        if (l2 < 1 || l2 > 19) { throw std::runtime_error(std::string(flag) + ": second zstd level must be 1-19"); }
+        return {l1, l2};
+    }
+    int l = std::stoi(body);
+    if (l < 1 || l > 19) { throw std::runtime_error(std::string(flag) + ": zstd level must be 1-19"); }
+    return {l, 0};
+}
+
 static bool parse_bool_value(const std::string & value) {
     if (is_truthy(value)) {
         return true;
@@ -1322,6 +1344,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_CACHE_RAM").set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
     add_opt(common_arg(
+        {"--cache-ram-zstd"}, "LEVEL",
+        "ZSTD compression level for idle slot state saved to cache-ram (1-19, 0 = disabled, default: 0)\n"
+        "reduces RAM used by --cache-ram at the cost of compress/decompress time on slot save/restore",
+        [](common_params & params, int value) {
+            params.cache_ram_zstd = value;
+        }
+    ).set_env("LLAMA_ARG_CACHE_RAM_ZSTD").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
         {"-kvu", "--kv-unified"},
         {"-no-kvu", "--no-kv-unified"},
         "use single unified KV buffer shared across all sequences (default: enabled if number of slots is auto)",
@@ -2024,26 +2054,66 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"-ctk", "--cache-type-k"}, "TYPE",
         string_format(
             "KV cache data type for K\n"
-            "allowed values: %s\n"
+            "allowed values: %s, zstd[:L1[-L2]]\n"
+            "  zstd:L       — first-pass compression at level L\n"
+            "  zstd:L1-L2   — first pass at L1, second pass at L2 (alias for --zstd-kv-recompress)\n"
+            "  type,zstd:…  — set quant type and compression together\n"
             "(default: %s)",
             get_all_kv_cache_types().c_str(),
             ggml_type_name(params.cache_type_k)
         ),
         [](common_params & params, const std::string & value) {
-            params.cache_type_k = kv_cache_type_from_str(value);
+            auto comma = value.find(',');
+            if (comma != std::string::npos) {
+                params.cache_type_k = kv_cache_type_from_str(value.substr(0, comma));
+                const std::string rest = value.substr(comma + 1);
+                if (is_zstd_qualifier(rest)) {
+                    auto [l1, l2] = parse_zstd_levels(rest, "-ctk");
+                    params.kv_zstd_level      = l1;
+                    params.kv_zstd_recompress = l2;
+                } else {
+                    throw std::runtime_error("-ctk: unrecognised qualifier '" + rest + "'; expected zstd[:L1[-L2]]");
+                }
+            } else if (is_zstd_qualifier(value)) {
+                auto [l1, l2] = parse_zstd_levels(value, "-ctk");
+                params.kv_zstd_level      = l1;
+                params.kv_zstd_recompress = l2;
+            } else {
+                params.cache_type_k = kv_cache_type_from_str(value);
+            }
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(common_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
         string_format(
             "KV cache data type for V\n"
-            "allowed values: %s\n"
+            "allowed values: %s, zstd[:L1[-L2]]\n"
+            "  zstd:L       — first-pass compression at level L\n"
+            "  zstd:L1-L2   — first pass at L1, second pass at L2 (alias for --zstd-kv-recompress)\n"
+            "  type,zstd:…  — set quant type and compression together\n"
             "(default: %s)",
             get_all_kv_cache_types().c_str(),
             ggml_type_name(params.cache_type_v)
         ),
         [](common_params & params, const std::string & value) {
-            params.cache_type_v = kv_cache_type_from_str(value);
+            auto comma = value.find(',');
+            if (comma != std::string::npos) {
+                params.cache_type_v = kv_cache_type_from_str(value.substr(0, comma));
+                const std::string rest = value.substr(comma + 1);
+                if (is_zstd_qualifier(rest)) {
+                    auto [l1, l2] = parse_zstd_levels(rest, "-ctv");
+                    params.kv_zstd_level      = l1;
+                    params.kv_zstd_recompress = l2;
+                } else {
+                    throw std::runtime_error("-ctv: unrecognised qualifier '" + rest + "'; expected zstd[:L1[-L2]]");
+                }
+            } else if (is_zstd_qualifier(value)) {
+                auto [l1, l2] = parse_zstd_levels(value, "-ctv");
+                params.kv_zstd_level      = l1;
+                params.kv_zstd_recompress = l2;
+            } else {
+                params.cache_type_v = kv_cache_type_from_str(value);
+            }
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(
@@ -2474,6 +2544,101 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false"),
         [](common_params & params) {
             params.check_tensors = true;
+        }
+    ));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd"}, "LEVEL",
+        "compress CPU-backend weight tensors with zstd seekable format (level 1-19); decompress transparently before each op",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 19) {
+                throw std::runtime_error("--cpu-weight-zstd: level must be 1-19");
+            }
+            params.cpu_weight_zstd_level = value;
+        }
+    ).set_env("LLAMA_ARG_CPU_WEIGHT_ZSTD"));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd-threshold"}, "RATIO",
+        string_format("skip tensor compression if compressed/original size ratio exceeds this value (default: %.2f)", params.cpu_weight_zstd_threshold),
+        [](common_params & params, const std::string & value) {
+            params.cpu_weight_zstd_threshold = std::stof(value);
+        }
+    ));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd-validate"},
+        "validate zstd weight compression with a round-trip decompress check at load time",
+        [](common_params & params) {
+            params.cpu_weight_zstd_validate = true;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-compress-threads"}, "N",
+        string_format("number of threads used during initial zstd weight compression (default: %d); more threads compress faster but raise peak RSS proportionally", 1),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::runtime_error("--zstd-compress-threads: must be >= 1");
+            }
+            params.cpu_weight_zstd_compress_threads = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--cpu-weight-zstd-frame-kb"}, "KB",
+        string_format("seekable zstd frame size in KB for weight compression (default: %d)", 256),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::runtime_error("--cpu-weight-zstd-frame-kb: must be >= 1");
+            }
+            params.cpu_weight_zstd_frame_kb = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-kv-cache"}, "LEVEL",
+        "compress CPU-resident KV cache with zstd asynchronously in the background (level 1-19); reduces steady-state RAM between decode calls at the cost of compression/decompression overhead",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 19) {
+                throw std::runtime_error("--zstd-kv-cache: level must be 1-19");
+            }
+            params.kv_zstd_level = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-kv-cache-frame-kb"}, "KB",
+        string_format("KV cache zstd frame size in KB (default: %d)", 256),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::runtime_error("--zstd-kv-cache-frame-kb: must be >= 1");
+            }
+            params.kv_zstd_frame_kb = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-kv-recompress"}, "LEVEL",
+        "after the first-pass KV cache compression completes, run a second pass at this\n"
+        "level (1-19) for better compression ratio; requires --zstd-kv-cache\n"
+        "recommended levels (measured on 100 MB float16 data, single thread):\n"
+        "  8  — 57 MB peak RAM, 0.18s — best RAM/time tradeoff\n"
+        "  15 — 161 MB peak RAM, 1.39s — maximum savings at reasonable compute cost\n"
+        "(default: 0 = single pass only)",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 19) {
+                throw std::runtime_error("--zstd-kv-recompress: level must be 1-19");
+            }
+            params.kv_zstd_recompress = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--zstd-threshold"}, "RATIO",
+        string_format(
+            "skip zstd compression (KV cache and weights) if compressed/original size ratio exceeds this value (default: %.2f)\n"
+            "e.g. 0.90 means skip if compression saves less than 10%%",
+            params.kv_zstd_threshold
+        ),
+        [](common_params & params, const std::string & value) {
+            float ratio = std::stof(value);
+            if (ratio <= 0.0f || ratio > 1.0f) {
+                throw std::runtime_error("--zstd-threshold: ratio must be in (0, 1]");
+            }
+            params.kv_zstd_threshold          = ratio;
+            params.cpu_weight_zstd_threshold  = ratio;
         }
     ));
     add_opt(common_arg(

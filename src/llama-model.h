@@ -14,6 +14,10 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef GGML_USE_ZSTD
+#include "llama-weight-zstd.h"
+#endif
+
 struct llama_cparams;
 struct llama_ubatch;
 struct llama_model_loader;
@@ -576,6 +580,10 @@ struct llama_model {
 
     int64_t t_load_us  = 0;
     int64_t t_start_us = 0;
+
+#ifdef GGML_USE_ZSTD
+    std::unique_ptr<llama_zstd_model_state> zstd_state;
+#endif
 
     explicit llama_model(const struct llama_model_params & params);
     ~llama_model();

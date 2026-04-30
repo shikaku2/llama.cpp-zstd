@@ -6,6 +6,10 @@
 #include "llama-kv-zstd.h"
 #include "llama-memory.h"
 
+#ifdef GGML_USE_ZSTD
+#include "llama-kv-zstd.h"
+#endif
+
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -145,9 +149,11 @@ public:
     void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
     void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
 
-    void kv_zstd_init(int level, size_t frame_kb, float threshold) override;
-    void kv_zstd_pre_decode() override;
-    void kv_zstd_post_decode() override;
+#ifdef GGML_USE_ZSTD
+    void kv_zstd_init    (int level, size_t frame_kb, float threshold, int recompress = 0) override;
+    void kv_zstd_pre_decode  () override;
+    void kv_zstd_post_decode () override;
+#endif
 
     //
     // llama_kv_cache specific API
@@ -282,6 +288,10 @@ private:
 
     // model layer id -> KV cache layer id
     std::unordered_map<int32_t, int32_t> map_layer_ids;
+
+#ifdef GGML_USE_ZSTD
+    std::unique_ptr<kv_zstd_state> zstd;
+#endif
 
     size_t total_size() const;
 

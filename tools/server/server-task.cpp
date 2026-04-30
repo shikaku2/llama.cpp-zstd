@@ -1,5 +1,9 @@
 #include "server-task.h"
 
+#ifdef GGML_USE_ZSTD
+#include <zstd.h>
+#endif
+
 #include "build-info.h"
 #include "server-chat.h"
 #include "chat.h"
@@ -2026,6 +2030,7 @@ server_prompt * server_prompt_cache::alloc(const server_prompt & prompt, size_t 
     cur = {
         /*.tokens      =*/ prompt.tokens.clone(),
         /*.data        =*/ std::move(state_data),
+        /*.raw_size    =*/ 0,
         /*.checkpoints =*/ prompt.checkpoints,
     };
 
@@ -2065,10 +2070,27 @@ bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tok
     if (it_best != states.end()) {
         SRV_WRN(" - found better prompt with f_keep = %.3f, sim = %.3f\n", f_keep_best, sim_best);
 
-        const size_t size = it_best->data.size();
-        const size_t n = llama_state_seq_set_data_ext(ctx, it_best->data.data(), size, id_slot, 0);
-        if (n != size) {
-            SRV_WRN("failed to restore state with size %zu\n", size);
+        const uint8_t * restore_data = it_best->data.data();
+        size_t restore_size = it_best->data.size();
+
+#ifdef GGML_USE_ZSTD
+        std::vector<uint8_t> decompressed;
+        if (it_best->raw_size > 0) {
+            decompressed.resize(it_best->raw_size);
+            const size_t n = ZSTD_decompress(decompressed.data(), it_best->raw_size,
+                                              it_best->data.data(), it_best->data.size());
+            if (ZSTD_isError(n)) {
+                SRV_WRN("failed to decompress cached state: %s\n", ZSTD_getErrorName(n));
+                return false;
+            }
+            restore_data = decompressed.data();
+            restore_size = n;
+        }
+#endif
+
+        const size_t n = llama_state_seq_set_data_ext(ctx, restore_data, restore_size, id_slot, 0);
+        if (n != restore_size) {
+            SRV_WRN("failed to restore state with size %zu\n", restore_size);
 
             return false;
         }
@@ -2121,7 +2143,15 @@ void server_prompt_cache::update() {
             states.size(), size() / (1024.0 * 1024.0), limit_size / (1024.0 * 1024.0), limit_tokens, limit_tokens_cur);
 
     for (const auto & state : states) {
-        SRV_WRN("   - prompt %p: %7d tokens, checkpoints: %2zu, %9.3f MiB\n",
-                (const void *)&state, state.n_tokens(), state.checkpoints.size(), state.size() / (1024.0 * 1024.0));
+        const size_t csz = state.size();
+        const size_t rsz = state.decompressed_size();
+        if (rsz != csz) {
+            SRV_WRN("   - prompt %p: %7d tokens, checkpoints: %2zu, %9.3f MiB (%.3f MiB uncompressed)\n",
+                    (const void *)&state, state.n_tokens(), state.checkpoints.size(),
+                    csz / (1024.0 * 1024.0), rsz / (1024.0 * 1024.0));
+        } else {
+            SRV_WRN("   - prompt %p: %7d tokens, checkpoints: %2zu, %9.3f MiB\n",
+                    (const void *)&state, state.n_tokens(), state.checkpoints.size(), csz / (1024.0 * 1024.0));
+        }
     }
 }

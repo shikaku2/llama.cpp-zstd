@@ -466,6 +466,16 @@ struct common_params {
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
     enum llama_flash_attn_type   flash_attn_type   = LLAMA_FLASH_ATTN_TYPE_AUTO; // whether to use Flash Attention
 
+    int   cpu_weight_zstd_level              = 0;      // 0 = disabled, 1-19 = compression level
+    float cpu_weight_zstd_threshold          = 0.99f;  // skip tensor if compressed_size/original_size > threshold
+    bool  cpu_weight_zstd_validate           = false;
+    int   cpu_weight_zstd_compress_threads   = 1;      // threads used during initial compression (default 1 to keep peak RAM low)
+    int   cpu_weight_zstd_frame_kb           = 32;      // seekable frame size in KB (default 32)
+    int   kv_zstd_level                      = 0;      // 0 = disabled; async background KV cache compression level
+    int   kv_zstd_frame_kb                   = 256;    // KV cache compression frame size in KB
+    float kv_zstd_threshold                  = 0.99f;  // skip frame if compressed/original size ratio exceeds this
+    int   kv_zstd_recompress                 = 0;      // 0 = single pass; 1-19 = second-pass level for better compression
+
     struct common_params_sampling    sampling;
     struct common_params_speculative speculative;
     struct common_params_vocoder     vocoder;
@@ -594,7 +604,11 @@ struct common_params {
     bool    cache_idle_slots    = true;  // save and clear idle slots upon starting a new task
     int32_t n_ctx_checkpoints   = 32;    // max number of context checkpoints per slot
     int32_t checkpoint_every_nt = 8192;  // make a checkpoint every n tokens during prefill
-    int32_t cache_ram_mib       = 8192;  // -1 = no limit, 0 - disable, 1 = 1 MiB, etc.
+    // Disabled by default: only useful when memory bandwidth is limited but RAM is plentiful
+    // (e.g. iGPU/unified-memory systems). Enabling saves KV slot state to heap between requests
+    // so the OS can reclaim physical pages, at the cost of serialize/deserialize on every slot transition.
+    int32_t cache_ram_mib       = 0;     // -1 = no limit, 0 - disable, 1 = 1 MiB, etc.
+    int32_t cache_ram_zstd      = 0;     // ZSTD level for compressing cache-ram slot state (0 = disabled)
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT

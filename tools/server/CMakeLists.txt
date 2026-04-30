@@ -27,6 +27,14 @@ target_include_directories(${TARGET} PRIVATE ../mtmd)
 target_include_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(${TARGET} PUBLIC llama-common mtmd ${CMAKE_THREAD_LIBS_INIT})
 
+if (LLAMA_ZSTD)
+    if (LIBZSTD_FOUND)
+        target_link_libraries(${TARGET} PRIVATE ${LIBZSTD_LIBRARIES})
+    else()
+        target_link_libraries(${TARGET} PRIVATE ${ZSTD_LIB})
+    endif()
+endif()
+
 
 # llama-server executable
 
